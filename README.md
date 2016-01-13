@@ -1,1 +1,13 @@
 # remotedocker-demo
+
+this is a proof-of-concept code for a remote interactive docker session. The client's TTY is connected via ZeroMQ sockets to ports that the server publishes. The client does not need to have any access to the machine running the server or the docker daemon, but just listens/posts to these ports.
+
+On the server side, a webserver spawns interactive docker session for a specified container/command pair upon a corresponding HTTP request by the client.  the interactive docker session is connected to a pseudo-terminal which itself talks to ZeroMQ on random ports to interact with the remote client.
+
+client code:
+    remotedocker <container> <command>
+
+since the demo machine is behind a cern firewall you need to setup a SSH tunnel to the webserver at 'localhost:3000', i.e. 
+    ssh -fNL 3000:<demo-machine>:5000 lxplus
+
+for the same reason the client will ask twice (for input and output) for the password for LXPLUS for now, but if the port range selected by the server (now: 5000,6000) should be accessible by the outside, this will not be needed. 
