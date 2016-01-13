@@ -72,7 +72,7 @@ def start_server(publishport, subscribeport, container, command):
         #print 'process: {}'.format(procpoll)
 
         if procpoll is not None:
-            #print 'send fromprocess'
+	    print "ending session because process ended"
             pub_socket.send('')
             return
         
