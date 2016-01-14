@@ -51,8 +51,8 @@ def client(container,command):
         tty.setraw(sys.stdin.fileno())
         tty.setcbreak(sys.stdin.fileno())
         while True:
-            r, w, x  = select.select([sys.stdin], [], [], 0.01)
-            zr,zw,zx = zmq.select([sub_socket],[pub_socket],[], timeout = 0.001)
+            r, w, x  = select.select([sys.stdin], [], [], 0.0)
+            zr,zw,zx = zmq.select([sub_socket],[pub_socket],[], timeout = 0.0)
 
             if (sys.stdin in r) and (pub_socket in zw):
                 x = sys.stdin.read(1)
@@ -67,7 +67,6 @@ def client(container,command):
                 sys.stdout.write(x)
                 sys.stdout.flush()
             # time.sleep(0.0001)
-
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
