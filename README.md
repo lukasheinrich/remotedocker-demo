@@ -20,3 +20,6 @@ this is also more restrictive than completely exposing the docker unix socket to
     cd remotedocker-demo
     pip install -e .
 
+#### screencast
+
+check out https://asciinema.org/a/01k9ll6bilqnx593hq1jocdc2
