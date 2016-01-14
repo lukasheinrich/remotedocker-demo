@@ -1,3 +1,14 @@
+import termios
+import struct
+import fcntl
+import sys
+
+def set_winsize(fd, row, col, xpix=0, ypix=0):
+    winsize = struct.pack("HHHH", row, col, xpix, ypix)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+
+
+
 def start_server(publishport, subscribeport, container, command):
     print "enter function {} {} {} {}".format(publishport, subscribeport, container, command)
     import time
@@ -31,9 +42,13 @@ def start_server(publishport, subscribeport, container, command):
 
     import pty
     master, slave = pty.openpty()
+    set_winsize(master,10,150)
 
     import shlex
-    p = subprocess.Popen(shlex.split('docker run -it {} {}'.format(container,command)), stdin = slave, stdout = slave, stderr = slave)
+    afsdirmount = '/afs/cern.ch/user/l/lheinric/testafs'
+    subprocess.call(shlex.split('cvmfs_config probe'))
+    print "start docker"
+    p = subprocess.Popen(shlex.split('docker run -it -v /cvmfs:/cvmfs -v {}:/output {} {}'.format(afsdirmount,container,command)), stdin = slave, stdout = slave, stderr = slave)
     #p = subprocess.Popen(shlex.split('sh -i'), stdin = slave, stdout = slave, stderr = slave)
 
     import os
@@ -56,23 +71,23 @@ def start_server(publishport, subscribeport, container, command):
     #print "wait for stop signal from client"
     #stop = rep_socket.recv()
     #print "acknowledge!"
-    #rep_socket.send('ack '.format(stop))
+    #rep_socket.send('ack '.format(stop)
 
+    sockets = [pub_socket,rep_socket]
     while True:
         #print "polling"
-        r, w, x = select.select([master],[master],[master])
+        r, w, x = select.select([master],[master],[master], 0.0)
         #print "master poll: r: {} w: {} x: {}".format(r,w,x)
 
-        sockets = [pub_socket,rep_socket]
         #print "sockets: pub {} sub {}".format(*sockets)
-        zr,zw,zx = zmq.select(sockets, sockets,sockets, timeout = 0.01)
+        zr,zw,zx = zmq.select(sockets, sockets,sockets, timeout = 0.0)
         #print "ZMQ poll: r: {} w: {} x: {}".format(zr,zw,zx)
 
         procpoll = p.poll()
         #print 'process: {}'.format(procpoll)
 
         if procpoll is not None:
-            #print 'send fromprocess'
+	    print "ending session because process ended"
             pub_socket.send('')
             return
         
@@ -93,7 +108,7 @@ def start_server(publishport, subscribeport, container, command):
             #print "wrote it"
 
     
-        time.sleep(0.001)
+#        time.sleep(0.001)
 
 if __name__ == '__main__':
     start_server(5556, 5557, 'container', 'command')
