@@ -17,21 +17,21 @@ from zmq import ssh
 def client(container,command):
     context = zmq.Context()
 
-    r = requests.get('http://localhost:3000/start?container={}&command={}'.format(container,command))
+    r = requests.get('http://lheinric-dockerinteractive:5000/start?container={0}&command={1}'.format(container,command))
     readfrom, writeto = r.json()['readfrom'],r.json()['writeto']
 
     click.secho('starting remote docker session', fg = 'green')
 
     #incoming messages
     sub_socket = context.socket(zmq.SUB)
-    # sub_socket.("tcp://localhost:{}".format(readfrom))
-    ssh.tunnel_connection(sub_socket,'tcp://lheinric-dockerinteractive:{}'.format(readfrom),'lxplus')
+    sub_socket.connect("tcp://lheinric-dockerinteractive:{0}".format(readfrom))
+    # ssh.tunnel_connection(sub_socket,'tcp://lheinric-dockerinteractive:{0}'.format(readfrom),'lxplus')
     sub_socket.setsockopt(zmq.SUBSCRIBE,'')
 
     #outgoing messages
     pub_socket = context.socket(zmq.REQ)
-    # pub_socket.connect("tcp://localhost:{}".format(writeto))
-    ssh.tunnel_connection(pub_socket,'tcp://lheinric-dockerinteractive:{}'.format(writeto),'lxplus')
+    pub_socket.connect("tcp://lheinric-dockerinteractive:{0}".format(writeto))
+    # ssh.tunnel_connection(pub_socket,'tcp://lheinric-dockerinteractive:{0}'.format(writeto),'lxplus')
 
     poller = zmq.Poller()
     poller.register(sub_socket,zmq.POLLIN)
