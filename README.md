@@ -5,6 +5,7 @@ this is a proof-of-concept code for a remote interactive docker session. The cli
 On the server side, a webserver spawns interactive docker session for a specified container/command pair upon a corresponding HTTP request by the client.  the interactive docker session is connected to a pseudo-terminal which itself talks to ZeroMQ on random ports to interact with the remote client.
 
 client code:
+
     remotedocker <container> <command>
 
 since the demo machine is behind a cern firewall you need to setup a SSH tunnel to the webserver at 'localhost:3000', i.e. 
