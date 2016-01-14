@@ -42,7 +42,7 @@ def client(container,command):
     ack = pub_socket.recv()
 
 
-    click.secho('we\'ll be with you shorty...', fg = 'green')
+    click.secho('we\'ll be with you shortly...', fg = 'green')
     m = sub_socket.recv()
 
     oldtty = termios.tcgetattr(sys.stdin)
