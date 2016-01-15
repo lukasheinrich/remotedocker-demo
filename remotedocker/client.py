@@ -17,33 +17,27 @@ from zmq import ssh
 def client(container,command):
     context = zmq.Context()
 
-    r = requests.get('http://lheinric-dockerinteractive:5000/start?container={0}&command={1}'.format(container,command))
-    readfrom, writeto = r.json()['readfrom'],r.json()['writeto']
-
+    r = requests.get('http://lheinric-dockerinteractive:6000/start?container={0}&command={1}'.format(container,command))
+    readfrom = r.json()['readfrom']
+    
     click.secho('starting remote docker session', fg = 'green')
 
     #incoming messages
-    sub_socket = context.socket(zmq.SUB)
-    sub_socket.connect("tcp://lheinric-dockerinteractive:{0}".format(readfrom))
+    socket = context.socket(zmq.PAIR)
+    socket.connect("tcp://lheinric-dockerinteractive:{0}".format(readfrom))
     # ssh.tunnel_connection(sub_socket,'tcp://lheinric-dockerinteractive:{0}'.format(readfrom),'lxplus')
-    sub_socket.setsockopt(zmq.SUBSCRIBE,'')
-
-    #outgoing messages
-    pub_socket = context.socket(zmq.REQ)
-    pub_socket.connect("tcp://lheinric-dockerinteractive:{0}".format(writeto))
-    # ssh.tunnel_connection(pub_socket,'tcp://lheinric-dockerinteractive:{0}'.format(writeto),'lxplus')
 
     poller = zmq.Poller()
-    poller.register(sub_socket,zmq.POLLIN)
-    poller.register(pub_socket,zmq.POLLIN)
-    sockets = [pub_socket,sub_socket]
+    poller.register(socket,zmq.POLLIN)
+    sockets = [socket]
 
-    pub_socket.send('start')
-    ack = pub_socket.recv()
+    socket.send('start')
+    ack = socket.recv()
 
 
     click.secho('we\'ll be with you shortly...', fg = 'green')
-    m = sub_socket.recv()
+
+    m = socket.recv()
 
     oldtty = termios.tcgetattr(sys.stdin)
 
@@ -52,17 +46,17 @@ def client(container,command):
         tty.setcbreak(sys.stdin.fileno())
         while True:
             r, w, x  = select.select([sys.stdin], [], [], 0.01)
-            zr,zw,zx = zmq.select([sub_socket],[pub_socket],[], timeout = 0.001)
+            zr,zw,zx = zmq.select(sockets,sockets,[], timeout = 0.001)
 
-            if (sys.stdin in r) and (pub_socket in zw):
+            if (sys.stdin in r) and (socket in zw):
                 x = sys.stdin.read(1)
-                pub_socket.send(x)
-                pub_socket.recv()
+                socket.send(x)
         
-            if (sub_socket in zr):
-                x = sub_socket.recv()
+            if (socket in zr):
+                x = socket.recv()
                 if len(x) == 0:
                     sys.stdout.write('\r\nexiting... \r\n')
+		    socket.send('bye from client')
                     break
                 sys.stdout.write(x)
                 sys.stdout.flush()
