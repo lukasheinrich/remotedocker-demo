@@ -18,6 +18,11 @@ def client(container,command):
     context = zmq.Context()
 
     r = requests.get('http://lheinric-dockerinteractive:6000/start?container={0}&command={1}'.format(container,command))
+    if not r.ok:
+        e =  click.ClickException(message = click.style('sorry, there is no spot available on the server', fg = 'red'))
+        e.exit_code = 1
+        raise e
+
     readfrom = r.json()['readfrom']
     
     click.secho('starting remote docker session', fg = 'green')
