@@ -45,8 +45,8 @@ def client(container,command):
         tty.setraw(sys.stdin.fileno())
         tty.setcbreak(sys.stdin.fileno())
         while True:
-            r, w, x  = select.select([sys.stdin], [], [], 0.01)
-            zr,zw,zx = zmq.select(sockets,sockets,[], timeout = 0.001)
+            r, w, x  = select.select([sys.stdin], [], [], 0.0)
+            zr,zw,zx = zmq.select(sockets,sockets,[], timeout = 0.0)
 
             if (sys.stdin in r) and (socket in zw):
                 x = sys.stdin.read(1)
