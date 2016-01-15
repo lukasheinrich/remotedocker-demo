@@ -5,18 +5,40 @@ import random
 app = flask.Flask('app')
 app.debug = True
 
+
+POOLSIZE = 10
+
 import multiprocessing
-pool = multiprocessing.Pool(4)
+pool = multiprocessing.Pool(POOLSIZE)
 
 from runserver import start_server
 
+resultsobjs = []
+
+def spot_available():
+    global resultsobjs
+    print '# of results {}'.format(len(resultsobjs))
+    for i,x in enumerate(resultsobjs):
+        if x.ready():
+            resultsobjs.pop(i)
+            print 'freeing ready object'
+    return len(resultsobjs) < POOLSIZE
+        
 @app.route('/start')
 def start():
     print "starting "
     container = flask.request.args['container']
     command =  flask.request.args['command']
     publishport = random.randint(5000,6000)
+
+    if not spot_available():
+        return '',404
+
+    print 'spot available: {}'.format(spot_available())
+
     result = pool.apply_async(start_server,(publishport,container,command))
+    global resultsobjs
+    resultsobjs += [result]
     return flask.jsonify({'readfrom':publishport}) 
 
 @app.route('/')
