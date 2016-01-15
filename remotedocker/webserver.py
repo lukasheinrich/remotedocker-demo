@@ -15,13 +15,13 @@ def start():
     print "starting "
     container = flask.request.args['container']
     command =  flask.request.args['command']
-    publishport, subscribeport = random.randint(5000,6000), random.randint(5000,6000)
-    result = pool.apply_async(start_server,(publishport,subscribeport,container,command))
-    return flask.jsonify({'writeto':subscribeport, 'readfrom':publishport}) 
+    publishport = random.randint(5000,6000)
+    result = pool.apply_async(start_server,(publishport,container,command))
+    return flask.jsonify({'readfrom':publishport}) 
 
 @app.route('/')
 def home():
     return 'OK!'
     
 if __name__ == '__main__':
-    app.run(host = '0.0.0.0', port = 5000)
+    app.run(host = '0.0.0.0', port = 6000)
