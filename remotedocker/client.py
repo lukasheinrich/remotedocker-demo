@@ -30,7 +30,7 @@ def client(container,command,output,tunnel):
     else:
         webhost = 'lheinric-dockerinteractive'
 
-    url  = 'http://{}:6000/start?'.format(webhost)
+    url  = 'http://{0}:6000/start?'.format(webhost)
     parameters = []
     parameters.append('container={0}'.format(container))
     parameters.append('command={0}'.format(command))
