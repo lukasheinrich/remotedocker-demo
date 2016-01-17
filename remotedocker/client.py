@@ -20,13 +20,17 @@ from zmq import ssh
 @click.argument('container')
 @click.argument('command')
 @click.option('-o','--output',default = None)
-def client(container,command,output):
+@click.option('--tunnel/--no-tunnel',default = False)
+def client(container,command,output,tunnel):
     context = zmq.Context()
+    
+    if tunnel:
+        ssh.tunnel.openssh_tunnel(6000,6000,'lxplus','lheinric-dockerinteractive')
+        webhost = 'localhost'
+    else:
+        webhost = 'lheinric-dockerinteractive'
 
-  
-
-
-    url  = 'http://lheinric-dockerinteractive:6000/start?'
+    url  = 'http://{}:6000/start?'.format(webhost)
     parameters = []
     parameters.append('container={0}'.format(container))
     parameters.append('command={0}'.format(command))
@@ -47,8 +51,10 @@ def client(container,command,output):
 
     #incoming messages
     socket = context.socket(zmq.PAIR)
-    socket.connect("tcp://lheinric-dockerinteractive:{0}".format(readfrom))
-    # ssh.tunnel_connection(sub_socket,'tcp://lheinric-dockerinteractive:{0}'.format(readfrom),'lxplus')
+    if tunnel:
+        ssh.tunnel_connection(socket,'tcp://lheinric-dockerinteractive:{0}'.format(readfrom),'lxplus')
+    else:
+        socket.connect("tcp://lheinric-dockerinteractive:{0}".format(readfrom))
 
     poller = zmq.Poller()
     poller.register(socket,zmq.POLLIN)
