@@ -9,7 +9,7 @@ setup(
         'zmq',
         'requests',
         'click',
-        'pexpect'
+#        'pexpect'
     ],
     entry_points = {
       'console_scripts': ['remotedocker=remotedocker.client:client'],
