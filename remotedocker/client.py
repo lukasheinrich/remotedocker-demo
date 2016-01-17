@@ -99,8 +99,8 @@ def handle_tty(socket):
 
     try:
         # Add O_NONBLOCK to the stdin descriptor flags 
-        flags = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
-        fcntl.fcntl(sys.stdin, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        # flags = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
+        # fcntl.fcntl(sys.stdin, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
         tty.setraw(sys.stdin.fileno())
         tty.setcbreak(sys.stdin.fileno())
@@ -112,7 +112,7 @@ def handle_tty(socket):
             zr,zw,zx = zmq.select([socket],[socket],[], timeout = 0.0)
 
             if (sys.stdin in r) and (socket in zw):
-                x = sys.stdin.read()
+                x = sys.stdin.read(1)
 		#print "got ",repr(x)
                 socket.send_json({'p':x})
         
@@ -123,7 +123,11 @@ def handle_tty(socket):
 		    socket.send_json({'ctrl':'bye from client'})
                     break
                 sys.stdout.write(x)
-                sys.stdout.flush()
+                while True:
+                    r, w, x  = select.select([], [sys.stdout], [], 0.0)
+                    if sys.stdout in w:
+                        sys.stdout.flush()
+                        break
             # time.sleep(0.0001)
 
     finally:
