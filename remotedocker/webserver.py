@@ -6,7 +6,7 @@ app = flask.Flask('app')
 app.debug = True
 
 
-POOLSIZE = 1
+POOLSIZE = 10
 
 import multiprocessing
 pool = multiprocessing.Pool(POOLSIZE)
