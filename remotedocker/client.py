@@ -106,7 +106,7 @@ def handle_tty(socket):
         tty.setcbreak(sys.stdin.fileno())
         while True:
             try:
-                r, w, x  = select.select([sys.stdin], [], [], 0.0)
+                r, w, x  = select.select([sys.stdin], [sys.stdout], [], 0.0)
             except select.error:
                 pass
             zr,zw,zx = zmq.select([socket],[socket],[], timeout = 0.0)
@@ -116,7 +116,7 @@ def handle_tty(socket):
 		#print "got ",repr(x)
                 socket.send_json({'p':x})
         
-            if (socket in zr):
+            if (socket in zr) and (sys.stdout in w):
                 x = socket.recv()
                 if len(x) == 0:
                     sys.stdout.write('\r\nexiting... \r\n')
