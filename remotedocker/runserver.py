@@ -43,24 +43,17 @@ def start_server(publishport, container, command, afsdirmount):
 
     print 'is tty: {}'.format(istty)
 
+
+    try:
+        container_id = start_container(container,command,afsdirmount)
+    except RuntimeError:
+        print "starting container failed"
+	socket.send_json({'ctrl':'terminated'})
+        return
     if istty:
-        handle_tty(socket,container,command,afsdirmount)
+        handle_tty(socket,container_id)
 
-
-def handle_tty(socket,container,command,afsdirmount):
-    import pty
-    master, slave = pty.openpty()
-
-    term_size = socket.recv_json()['ctrl']['term_size']
-
-    print term_size
-
-    import shlex
-    print "start docker: container: {} command: {} mount: {} ".format(container,command, afsdirmount)
-
-
-    cmd  = 'docker run -it'
-
+def start_container(container,command,afsdirmount):
     volumes = []
     binds = []
     if afsdirmount:
@@ -76,17 +69,25 @@ def handle_tty(socket,container,command,afsdirmount):
             volumes=volumes,
             host_config=c.create_host_config(binds=binds)
         )
-        print 'starting docker container'
+        print "starting docker: container: {} command: {} mount: {} ".format(container,command, afsdirmount)
+
         c.start(container_id['Id'])
         print 'ID is {}'.format(container_id['Id'])
+	return container_id
     except:
-        socket.send_json({'ctrl':'terminated'})
         print 'could not start container'
-        return
+        raise RuntimeError
 
+def handle_tty(socket,container_id):
+    import pty
+    master, slave = pty.openpty()
+
+    import shlex
     p = subprocess.Popen(shlex.split('docker attach {}'.format(container_id['Id'])), stdin = slave, stdout = slave, stderr = slave)
     print 'attach to container with pid {}'.format(p.pid)
 
+    term_size = socket.recv_json()['ctrl']['term_size']
+    print term_size
     set_winsize(master,term_size['rows'],term_size['cols'],p.pid)
 
     while True:
