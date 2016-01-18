@@ -45,15 +45,17 @@ def start_server(publishport, container, command, afsdirmount):
 
 
     try:
-        container_id = start_container(container,command,afsdirmount)
+        container_id = start_container(container,command,afsdirmount,istty)
     except RuntimeError:
         print "starting container failed"
 	socket.send_json({'ctrl':'terminated'})
         return
     if istty:
         handle_tty(socket,container_id)
+    else:
+        handle_nontty(socket,container_id)
 
-def start_container(container,command,afsdirmount):
+def start_container(container,command,afsdirmount,istty):
     volumes = []
     binds = []
     if afsdirmount:
@@ -65,7 +67,7 @@ def start_container(container,command,afsdirmount):
         container_id = c.create_container(
             image = container, command = command,
             stdin_open = True,
-            tty = True,
+            tty = istty,
             volumes=volumes,
             host_config=c.create_host_config(binds=binds)
         )
@@ -77,6 +79,19 @@ def start_container(container,command,afsdirmount):
     except:
         print 'could not start container'
         raise RuntimeError
+
+def handle_nontty(socket,container_id):
+    print 'handling non tty docker session'
+    m = socket.recv_json()    
+    print 'got ',m
+
+    print "stop container"
+    dockerclient = docker.Client()
+    dockerclient.stop(container_id['Id'])
+    print 'stopped'
+    
+    socket.send_json({'ctrl':'ack stopped'})
+    return
 
 def handle_tty(socket,container_id):
     print 'handling tty docker session'
@@ -132,7 +147,8 @@ def handle_tty(socket,container_id):
 			if ctrlmsg['signal'] in [signal.SIGHUP,signal.SIGTERM,signal.SIGKILL]:
                             print 'stopping container due to SIGHUP, SIGTERM, or SIGKILL'
 			    os.kill(p.pid,ctrlmsg['signal'])
-			    c.stop(container_id['Id'])
+			    dockerclient = docker.Client()
+			    dockerclient.stop(container_id['Id'])
 			    print 'container stopped'
 			else:
 		            os.kill(p.pid,ctrlmsg['signal'])
