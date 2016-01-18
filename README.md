@@ -23,4 +23,9 @@ this is also more restrictive than completely exposing the docker unix socket to
 
 #### screencast
 
-check out https://asciinema.org/a/01k9ll6bilqnx593hq1jocdc2
+from outside CERN (tunneling via `lxplus`)
+[![asciicast](https://asciinema.org/a/9kkugc45wlz16sdivm5e20h6s.png)](https://asciinema.org/a/9kkugc45wlz16sdivm5e20h6s)
+
+from inside CERN
+[![asciicast](https://asciinema.org/a/4n7bjiffdn393m9t746rf1y6s.png)](https://asciinema.org/a/4n7bjiffdn393m9t746rf1y6s)
+
