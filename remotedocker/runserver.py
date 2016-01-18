@@ -82,8 +82,15 @@ def start_container(container,command,afsdirmount,istty):
 
 def handle_nontty(socket,container_id):
     print 'handling non tty docker session'
-    m = socket.recv_json()    
-    print 'got ',m
+
+    while True:
+        zr,zw,zx = zmq.select([socket], [socket],[socket], timeout = 0.0)
+
+        if (socket in zr):
+            message = socket.recv_json()
+            print("Received request: {} length: {}".format(message,len(message)))
+	    if 'ctrl' in message:
+                if message['ctrl'] == 'terminate': break
 
     print "stop container"
     dockerclient = docker.Client()
