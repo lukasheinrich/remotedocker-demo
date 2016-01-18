@@ -36,7 +36,7 @@ def start_server(publishport, container, command, afsdirmount):
     start = socket.recv_json()
 
     print "acknowledge!"
-    socket.send('ack '.format(start['ctrl']))
+    socket.send_json({'ctrl':'ackstart'.format(start['ctrl'])})
 
     istty = socket.recv_json()['ctrl']['tty']
 
@@ -53,10 +53,6 @@ def handle_tty(socket,container,command,afsdirmount):
     term_size = socket.recv_json()['ctrl']['term_size']
 
     print term_size
-
-	
-
-
 
     import shlex
     print "start docker: container: {} command: {} mount: {} ".format(container,command, afsdirmount)
@@ -84,12 +80,10 @@ def handle_tty(socket,container,command,afsdirmount):
         procpoll = p.poll()
         #print 'process: {}'.format(procpoll)
 
-        if procpoll is not None:
+        if (procpoll is not None) and (socket in zw):
 	    print "ending session because process ended"
-            socket.send('')
-            print "wait for client to end"
-            b = socket.recv_json()['ctrl']
-            print b
+            socket.send_json({'ctrl':'terminated'})
+	    print "return"
             return
         
     
@@ -97,7 +91,7 @@ def handle_tty(socket,container,command,afsdirmount):
             #print "reading!"
             fromprocess = os.read(master,1024)
             #print 'sending {}'.format(fromprocess)
-            socket.send(fromprocess)
+            socket.send_json({'p':fromprocess})
 
         if (master in w) and (socket in zr):
             #  Wait for next request from client
@@ -111,6 +105,9 @@ def handle_tty(socket,container,command,afsdirmount):
 		    ctrlmsg = message['ctrl']
         	    if 'term_size' in ctrlmsg:
 		        set_winsize(master,ctrlmsg['term_size']['rows'],ctrlmsg['term_size']['cols'],p.pid)
+		    if 'signal' in ctrlmsg:
+ 		        print 'got signal: {}'.format(ctrlmsg['signal']) 
+		        os.kill(p.pid,ctrlmsg['signal'])
             #print "wrote it"
 
     
