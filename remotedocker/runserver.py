@@ -11,6 +11,7 @@ import select
 import zmq
 import time
 import signal
+import docker
 
 def set_winsize(fd, row, col, pid):
     print 'setting window size to rows: {} cols: {} file: {} pid: {}'.format(row,col,fd,pid)
@@ -57,15 +58,34 @@ def handle_tty(socket,container,command,afsdirmount):
     import shlex
     print "start docker: container: {} command: {} mount: {} ".format(container,command, afsdirmount)
 
-    cmd  = 'docker run -it'
-    if afsdirmount:
-        cmd += ' -v {}:/output'.format(afsdirmount)
-    cmd += ' {} {}'.format(container,command)
 
-    print 'cmd {}'.format(cmd)
-   
-    p = subprocess.Popen(shlex.split(cmd), stdin = slave, stdout = slave, stderr = slave)
-    #p = subprocess.Popen(shlex.split('sh -i'), stdin = slave, stdout = slave, stderr = slave)
+    cmd  = 'docker run -it'
+
+    volumes = []
+    binds = []
+    if afsdirmount:
+        volumes = ['/output']
+        binds   = ['{}:/output'.format(afsdirmount)]
+
+    try:
+        c = docker.Client()
+        container_id = c.create_container(
+            image = container, command = command,
+            stdin_open = True,
+            tty = True,
+            volumes=volumes,
+            host_config=c.create_host_config(binds=binds)
+        )
+        print 'starting docker container'
+        c.start(container_id['Id'])
+        print 'ID is {}'.format(container_id['Id'])
+    except:
+        socket.send_json({'ctrl':'terminated'})
+        print 'could not start container'
+        return
+
+    p = subprocess.Popen(shlex.split('docker attach {}'.format(container_id['Id'])), stdin = slave, stdout = slave, stderr = slave)
+    print 'attach to container with pid {}'.format(p.pid)
 
     set_winsize(master,term_size['rows'],term_size['cols'],p.pid)
 
@@ -107,7 +127,14 @@ def handle_tty(socket,container,command,afsdirmount):
 		        set_winsize(master,ctrlmsg['term_size']['rows'],ctrlmsg['term_size']['cols'],p.pid)
 		    if 'signal' in ctrlmsg:
  		        print 'got signal: {}'.format(ctrlmsg['signal']) 
-		        os.kill(p.pid,ctrlmsg['signal'])
+			if ctrlmsg['signal'] in [signal.SIGHUP,signal.SIGTERM,signal.SIGKILL]:
+                            print 'stopping container due to SIGHUP, SIGTERM, or SIGKILL'
+			    os.kill(p.pid,ctrlmsg['signal'])
+			    c.stop(container_id['Id'])
+			    print 'container stopped'
+			else:
+		            os.kill(p.pid,ctrlmsg['signal'])
+
             #print "wrote it"
 
     
