@@ -69,6 +69,10 @@ def client(container,command,output,tunnel):
     
     if istty:
         handle_tty(socket)
+    else:
+        handle_nontty(socket)
+
+    click.secho('Bye.', fg = 'green')
 
 def terminal_size():
     # Check for buggy platforms (see pexpect.setwinsize()).
@@ -97,6 +101,13 @@ def get_sighup_handler(socket):
     def handler(sig,data):
         socket.send_json({'ctrl':{'signal':signal.SIGHUP}})
     return handler
+
+def handle_nontty(socket):
+    click.echo('non TTY mode')
+    socket.send_json({'ctrl':'nonttystart'})
+    m = socket.recv_json()
+    print 'received ack {0}'.format(m)
+    return
 
 def handle_tty(socket):
     click.secho('we\'ll be with you shortly...', fg = 'green')
@@ -149,7 +160,7 @@ def handle_tty(socket):
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
-    click.secho('Bye.', fg = 'green')
+
     
 
 if __name__ == '__main__':
