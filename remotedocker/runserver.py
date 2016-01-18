@@ -79,15 +79,16 @@ def start_container(container,command,afsdirmount):
         raise RuntimeError
 
 def handle_tty(socket,container_id):
+    print 'handling tty docker session'
+
     import pty
+    import shlex
     master, slave = pty.openpty()
 
-    import shlex
     p = subprocess.Popen(shlex.split('docker attach {}'.format(container_id['Id'])), stdin = slave, stdout = slave, stderr = slave)
-    print 'attach to container with pid {}'.format(p.pid)
+    print 'attached to container with pid {}'.format(p.pid)
 
     term_size = socket.recv_json()['ctrl']['term_size']
-    print term_size
     set_winsize(master,term_size['rows'],term_size['cols'],p.pid)
 
     while True:
