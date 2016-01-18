@@ -11,7 +11,7 @@ client code:
 since the demo machine is behind a cern firewall you need to setup a SSH tunnel to the webserver at 'localhost:3000', i.e. 
     ssh -fNL 3000:<demo-machine>:5000 lxplus
 
-for the same reason the client will ask twice (for input and output) for the password for LXPLUS for now, but if the port range selected by the server (now: 5000,6000) should be accessible by the outside, this will not be needed. 
+for the same reason the client will ask twice (once to get access to webserver and once to connect to the port received from the webserver) for the password for LXPLUS for now, but if the port range selected by the server (now: 5000,6000) should be accessible by the outside, this will not be needed. 
 
 this is also more restrictive than completely exposing the docker unix socket to the outside world. this only allows the remote client to connect to a  'docker run -it <container> <command>' call and not to remove containers/images etc.
 
