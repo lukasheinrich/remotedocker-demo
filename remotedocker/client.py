@@ -83,10 +83,20 @@ def terminal_size():
 
 
 def get_sigwinch_handler(socket):
-    def handle_sigwinch(sig,data):
+    def handler(sig,data):
         rows,cols = terminal_size()
         socket.send_json({'ctrl':{'term_size':{'rows':rows, 'cols':cols}}})
-    return handle_sigwinch
+    return handler
+
+def get_sigint_handler(socket):
+    def handler(sig,data):
+        socket.send_json({'ctrl':{'signal':signal.SIGINT}})
+    return handler
+
+def get_sighup_handler(socket):
+    def handler(sig,data):
+        socket.send_json({'ctrl':{'signal':signal.SIGHUP}})
+    return handler
 
 def handle_tty(socket):
     click.secho('we\'ll be with you shortly...', fg = 'green')
@@ -95,6 +105,8 @@ def handle_tty(socket):
     socket.send_json({'ctrl':{'term_size':{'rows':rows, 'cols':cols}}})
 
     signal.signal(signal.SIGWINCH, get_sigwinch_handler(socket))
+    signal.signal(signal.SIGINT, get_sigint_handler(socket))
+    signal.signal(signal.SIGHUP, get_sighup_handler(socket))
     oldtty = termios.tcgetattr(sys.stdin)
 
     try:
@@ -110,26 +122,30 @@ def handle_tty(socket):
             except select.error:
                 pass
             zr,zw,zx = zmq.select([socket],[socket],[], timeout = 0.0)
-
+            
             if (sys.stdin in r) and (socket in zw):
                 x = sys.stdin.read(1)
-		#print "got ",repr(x)
                 socket.send_json({'p':x})
         
             if (socket in zr) and (sys.stdout in w):
-                x = socket.recv()
-                if len(x) == 0:
-                    sys.stdout.write('\r\nexiting... \r\n')
-		    socket.send_json({'ctrl':'bye from client'})
-                    break
-                sys.stdout.write(x)
-                while True:
-                    r, w, x  = select.select([], [sys.stdout], [], 0.0)
-                    if sys.stdout in w:
-                        sys.stdout.flush()
-                        break
-            # time.sleep(0.0001)
-
+                x = socket.recv_json()
+	        try:
+                    plain = x['p']
+                    sys.stdout.write(plain)
+                    while True:
+                        r, w, x  = select.select([], [sys.stdout], [], 0.0)
+                        if sys.stdout in w:
+                            sys.stdout.flush()
+                            break
+                except KeyError:
+                    if 'ctrl' in x:
+                        ctrlmsg = x['ctrl']
+                        if 'terminated' in ctrlmsg:
+                            sys.stdout.write('\r\nexiting... \r\n')
+                            break
+    except:
+        click.secho('uncaught exception.. terminating', fg = 'red')
+	socket.send_json({'ctrl':{'signal':signal.SIGQUIT}})
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
