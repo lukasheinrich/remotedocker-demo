@@ -60,11 +60,15 @@ def client(container,command,output,tunnel):
     poller.register(socket,zmq.POLLIN)
     sockets = [socket]
 
+
+    signal.signal(signal.SIGWINCH, get_sigwinch_handler(socket))
+    signal.signal(signal.SIGINT, get_sigint_handler(socket))
+    signal.signal(signal.SIGHUP, get_sighup_handler(socket))
+
     socket.send_json({'ctrl':'start'})
     ack = socket.recv()
 
     istty = os.isatty(sys.stdin.fileno())
-    
     socket.send_json({'ctrl':{'tty':istty}})
     
     if istty:
@@ -104,7 +108,8 @@ def get_sighup_handler(socket):
 
 def handle_nontty(socket):
     click.echo('non TTY mode')
-    socket.send_json({'ctrl':'nonttystart'})
+    socket.send_json({'p':'a plain message'})
+    socket.send_json({'ctrl':'terminate'})
     m = socket.recv_json()
     print 'received ack {0}'.format(m)
     return
