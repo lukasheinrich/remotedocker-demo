@@ -1,6 +1,6 @@
 # remotedocker-demo
 
-this is a proof-of-concept code for a remote interactive docker session. The client's TTY is connected via ZeroMQ sockets to ports that the server publishes. The client does not need to have any access to the machine running the server or the docker daemon, but just listens/posts to these ports.
+this is a proof-of-concept code for a remote interactive docker sessions for environments without a local docker installation and full access to a remote docker host. The client's TTY is connected to a `docker attach ...` process on the server via a ZeroMQ socket to a port that the server publishes. The client does not need to have any access to the machine running the server or the docker daemon, but just reads/writes to these ports.
 
 On the server side, a webserver spawns interactive docker session for a specified container/command pair upon a corresponding HTTP request by the client.  the interactive docker session is connected to a pseudo-terminal which itself talks to ZeroMQ on random ports to interact with the remote client.
 
