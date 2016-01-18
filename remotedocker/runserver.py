@@ -31,8 +31,6 @@ def start_server(publishport, container, command, afsdirmount):
     poller.register(socket,zmq.POLLIN)
 
     print "starting server on port ",publishport
-
-
     print "wait for start signal from client"
     start = socket.recv_json()
 
@@ -42,7 +40,6 @@ def start_server(publishport, container, command, afsdirmount):
     istty = socket.recv_json()['ctrl']['tty']
 
     print 'is tty: {}'.format(istty)
-
 
     try:
         container_id = start_container(container,command,afsdirmount,istty)
@@ -130,7 +127,6 @@ def handle_tty(socket,container_id):
 	    print "return"
             return
         
-    
         if (master in r) and (socket in zw):
             #print "reading!"
             fromprocess = os.read(master,1024)

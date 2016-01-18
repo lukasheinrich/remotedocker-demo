@@ -30,7 +30,7 @@ def start():
     container = flask.request.args['container']
     command =  flask.request.args['command']
     afsdirmount = flask.request.args.get('afsdirmount',None)
-    publishport = random.randint(5000,6000)
+    publishport = random.randint(5000,5999)
 
     if not spot_available():
         return '',404
