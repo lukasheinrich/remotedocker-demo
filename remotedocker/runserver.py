@@ -41,71 +41,111 @@ def start_server(publishport, container, command, afsdirmount):
 
     print 'is tty: {}'.format(istty)
 
-    try:
-        container_id = start_container(container,command,afsdirmount,istty)
-    except RuntimeError:
-        print "starting container failed"
-	socket.send_json({'ctrl':'terminated'})
-        return
+    cmd, cidfile = docker_command(container,command,afsdirmount,istty)
     if istty:
-        handle_tty(socket,container_id)
+        handle_tty(cmd, cidfile, socket)
     else:
-        handle_nontty(socket,container_id)
+        handle_nontty(cmd, cidfile, socket)
+        
+def docker_command(container,command,afsdirmount,istty):
+    readstdin = True
 
-def start_container(container,command,afsdirmount,istty):
-    volumes = []
-    binds = []
+    import tempfile
+    f = tempfile.NamedTemporaryFile()
+    f.close()
+    cidfile = f.name
+
+    print 'cidfile is: {}'.format(cidfile)
+
+    cmd = 'docker run --cidfile {}'.format(cidfile)
+    if readstdin:
+        cmd += ' -i'
+    if istty:
+        cmd += ' -t'
     if afsdirmount:
-        volumes = ['/output']
-        binds   = ['{}:/output'.format(afsdirmount)]
+        cmd += ' -v {}:/output'.format(afsdirmount)
 
-    try:
-        c = docker.Client()
-        container_id = c.create_container(
-            image = container, command = command,
-            stdin_open = True,
-            tty = istty,
-            volumes=volumes,
-            host_config=c.create_host_config(binds=binds)
-        )
-        print "starting docker: container: {} command: {} mount: {} ".format(container,command, afsdirmount)
+    cmd += ' {} {}'.format(container,command)    
 
-        c.start(container_id['Id'])
-        print 'ID is {}'.format(container_id['Id'])
-	return container_id
-    except:
-        print 'could not start container'
-        raise RuntimeError
+    import shlex
+    print 'command is {}'.format(cmd)
+    return cmd, cidfile
 
-def handle_nontty(socket,container_id):
+def stop_container(container_id):
+    print 'stopping container with id {}'.format(container_id)
+    dockerclient = docker.Client()
+    dockerclient.stop(container_id)
+    print 'container stopped'
+
+def get_container_id(cid):
+    while not os.path.exists(cid) or (os.stat(cid).st_size == 0):
+        time.sleep(0.01)
+    container_id = open(cid).read()
+    return container_id
+    
+
+
+def handle_nontty(cmd,cid,socket):
     print 'handling non tty docker session'
 
+    import shlex
+    p = subprocess.Popen(shlex.split(cmd), stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+    print 'started container with pid: {}'.format(p.pid)
+    container_id = get_container_id(cid)
+    print 'container id is {}'.format(container_id)
+
     while True:
+        if p.poll() is not None:
+            print "ending session because process ended"
+            socket.send_json({'ctrl':'terminated'})
+            print 'wait for ack from client'
+            ack = socket.recv_json()
+            print "return"
+            return
+
+        writefds = []
+        if not p.stdin.closed:
+            writefds.append(p.stdin)
+
+        r,w,x = select.select([p.stdout],writefds,[],0.0)
         zr,zw,zx = zmq.select([socket], [socket],[socket], timeout = 0.0)
-
-        if (socket in zr):
+        if (socket in zr) and (p.stdin in w):
             message = socket.recv_json()
-            print("Received request: {} length: {}".format(message,len(message)))
-	    if 'ctrl' in message:
-                if message['ctrl'] == 'terminate': break
+            try:
+                if message['p'] == '':
+                    print 'EOF of input'
+                    p.stdin.close()
+                else:
+                    p.stdin.write(message['p'])
+            except KeyError:
+		if 'ctrl' in message:
+		    ctrlmsg = message['ctrl']
+                    if 'signal' in ctrlmsg:
+                        print 'got signal: {}'.format(ctrlmsg['signal'])
+                        os.kill(p.pid,ctrlmsg['signal'])
+			if ctrlmsg['signal'] in [signal.SIGHUP,signal.SIGTERM,signal.SIGKILL]:
+			    stop_container(container_id)
+                            return
+        if (p.stdout in r) and (socket in zw):
+            x = os.read(p.stdout.fileno(),1024)
+            socket.send_json({'p':x})
 
-    print "stop container"
-    dockerclient = docker.Client()
-    dockerclient.stop(container_id['Id'])
-    print 'stopped'
-    
-    socket.send_json({'ctrl':'ack stopped'})
+    print 'read reamining stdout buffer'
+    for x in  p.stdout.readlines():
+        socket.send_json({'p':x}) 
     return
 
-def handle_tty(socket,container_id):
+def handle_tty(cmd,cid,socket):
     print 'handling tty docker session'
 
     import pty
     import shlex
     master, slave = pty.openpty()
 
-    p = subprocess.Popen(shlex.split('docker attach {}'.format(container_id['Id'])), stdin = slave, stdout = slave, stderr = slave)
-    print 'attached to container with pid {}'.format(p.pid)
+    p = subprocess.Popen(shlex.split(cmd), stdin = slave, stdout = slave, stderr = slave)
+    print 'started container with pid: {}'.format(p.pid)
+    container_id = get_container_id(cid)
+    print 'container id is {}'.format(container_id)
 
     term_size = socket.recv_json()['ctrl']['term_size']
     set_winsize(master,term_size['rows'],term_size['cols'],p.pid)
@@ -124,7 +164,9 @@ def handle_tty(socket,container_id):
         if (procpoll is not None) and (socket in zw):
 	    print "ending session because process ended"
             socket.send_json({'ctrl':'terminated'})
-	    print "return"
+            print 'wait for ack from client'    
+	    ack = socket.recv_json()
+            print "return"
             return
         
         if (master in r) and (socket in zw):
@@ -147,15 +189,10 @@ def handle_tty(socket,container_id):
 		        set_winsize(master,ctrlmsg['term_size']['rows'],ctrlmsg['term_size']['cols'],p.pid)
 		    if 'signal' in ctrlmsg:
  		        print 'got signal: {}'.format(ctrlmsg['signal']) 
+                        os.kill(p.pid,ctrlmsg['signal'])
 			if ctrlmsg['signal'] in [signal.SIGHUP,signal.SIGTERM,signal.SIGKILL]:
-                            print 'stopping container due to SIGHUP, SIGTERM, or SIGKILL'
-			    os.kill(p.pid,ctrlmsg['signal'])
-			    dockerclient = docker.Client()
-			    dockerclient.stop(container_id['Id'])
-			    print 'container stopped'
-			else:
-		            os.kill(p.pid,ctrlmsg['signal'])
-
+                            stop_container(container_id)
+                            return
             #print "wrote it"
 
     
