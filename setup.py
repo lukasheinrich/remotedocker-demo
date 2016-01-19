@@ -15,5 +15,6 @@ setup(
     },
     extras_require = {
         'ssh':  ["pexpect"],
+	'server': ['flask']
     }
 )

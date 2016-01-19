@@ -38,7 +38,7 @@ def client(container,command,output,tunnel):
         parameters.append('afsdirmount={0}'.format(output))
 
     url = url + '&'.join(parameters)
- 
+
 
     r = requests.get(url)
     if not r.ok:
@@ -46,6 +46,7 @@ def client(container,command,output,tunnel):
         e.exit_code = 1
         raise e
     readfrom = r.json()['readfrom']
+    # readfrom = 5556
     
     click.secho('starting remote docker session', fg = 'green')
 
@@ -61,15 +62,16 @@ def client(container,command,output,tunnel):
     sockets = [socket]
 
 
-    signal.signal(signal.SIGWINCH, get_sigwinch_handler(socket))
-    signal.signal(signal.SIGINT, get_sigint_handler(socket))
-    signal.signal(signal.SIGHUP, get_sighup_handler(socket))
-
     socket.send_json({'ctrl':'start'})
     ack = socket.recv()
 
     istty = os.isatty(sys.stdin.fileno())
     socket.send_json({'ctrl':{'tty':istty}})
+    
+    signal.signal(signal.SIGWINCH, get_sigwinch_handler(socket))
+    signal.signal(signal.SIGINT, get_sigint_handler(socket))
+    signal.signal(signal.SIGHUP, get_sighup_handler(socket))
+    signal.signal(signal.SIGTERM, get_sigterm_handler(socket))
     
     if istty:
         handle_tty(socket)
@@ -77,6 +79,7 @@ def client(container,command,output,tunnel):
         handle_nontty(socket)
 
     click.secho('Bye.', fg = 'green')
+    return
 
 def terminal_size():
     # Check for buggy platforms (see pexpect.setwinsize()).
@@ -92,40 +95,64 @@ def terminal_size():
 
 def get_sigwinch_handler(socket):
     def handler(sig,data):
+        print "caught winch"
         rows,cols = terminal_size()
         socket.send_json({'ctrl':{'term_size':{'rows':rows, 'cols':cols}}})
+        sys.exit(0)
     return handler
 
 def get_sigint_handler(socket):
     def handler(sig,data):
+        print "caught int"
         socket.send_json({'ctrl':{'signal':signal.SIGINT}})
+        time.sleep(1)
+        raise RuntimeError('terminated due to handled signa')
     return handler
 
 def get_sighup_handler(socket):
     def handler(sig,data):
+        print "caught hup"
         socket.send_json({'ctrl':{'signal':signal.SIGHUP}})
+        time.sleep(1)
+        raise RuntimeError('terminated due to handled signa')
+    return handler
+
+def get_sigterm_handler(socket):
+    def handler(sig,data):
+        print "caught term"
+        socket.send_json({'ctrl':{'signal':signal.SIGTERM}})
+        time.sleep(1)
+        raise RuntimeError('terminated due to handled signa')
     return handler
 
 def handle_nontty(socket):
     click.echo('non TTY mode')
-    socket.send_json({'p':'a plain message'})
-    socket.send_json({'ctrl':'terminate'})
-    m = socket.recv_json()
-    print 'received ack {0}'.format(m)
+    try:
+        while True:
+            s = read_write_nontty(socket)
+            if s > 0: break
+    except RuntimeError as e:
+        click.secho('exception {}'.format(e))
+        click.Abort()
+    except:
+        click.secho('uncaught exception.. terminating', fg = 'red')
+        socket.send_json({'ctrl':{'signal':signal.SIGTERM}})
+        time.sleep(1)
+        print sys.exc_info()
+        click.secho('signal sent.', fg = 'red')
+        click.Abort()
+    finally:
+        pass
     return
 
 def handle_tty(socket):
-    click.secho('we\'ll be with you shortly...', fg = 'green')
-
-    rows,cols = terminal_size()
-    socket.send_json({'ctrl':{'term_size':{'rows':rows, 'cols':cols}}})
-
-    signal.signal(signal.SIGWINCH, get_sigwinch_handler(socket))
-    signal.signal(signal.SIGINT, get_sigint_handler(socket))
-    signal.signal(signal.SIGHUP, get_sighup_handler(socket))
-    oldtty = termios.tcgetattr(sys.stdin)
-
     try:
+        click.secho('we\'ll be with you shortly...', fg = 'green')
+    
+        rows,cols = terminal_size()
+        socket.send_json({'ctrl':{'term_size':{'rows':rows, 'cols':cols}}})
+    
+        oldtty = termios.tcgetattr(sys.stdin)
         # Add O_NONBLOCK to the stdin descriptor flags 
         # flags = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
         # fcntl.fcntl(sys.stdin, fcntl.F_SETFL, flags | os.O_NONBLOCK)
@@ -133,40 +160,77 @@ def handle_tty(socket):
         tty.setraw(sys.stdin.fileno())
         tty.setcbreak(sys.stdin.fileno())
         while True:
-            try:
-                r, w, x  = select.select([sys.stdin], [sys.stdout], [], 0.0)
-            except select.error:
-                pass
-            zr,zw,zx = zmq.select([socket],[socket],[], timeout = 0.0)
-            
-            if (sys.stdin in r) and (socket in zw):
-                x = sys.stdin.read(1)
-                socket.send_json({'p':x})
-        
-            if (socket in zr) and (sys.stdout in w):
-                x = socket.recv_json()
-	        try:
-                    plain = x['p']
-                    sys.stdout.write(plain)
-                    while True:
-                        r, w, x  = select.select([], [sys.stdout], [], 0.0)
-                        if sys.stdout in w:
-                            sys.stdout.flush()
-                            break
-                except KeyError:
-                    if 'ctrl' in x:
-                        ctrlmsg = x['ctrl']
-                        if 'terminated' in ctrlmsg:
-                            sys.stdout.write('\r\nexiting... \r\n')
-                            break
+            s = read_write(socket)
+            if s > 0: break
     except:
         click.secho('uncaught exception.. terminating', fg = 'red')
-	socket.send_json({'ctrl':{'signal':signal.SIGQUIT}})
+        socket.send_json({'ctrl':{'signal':signal.SIGTERM}})
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
+def read_write(socket):
+    try:
+        r, w, x  = select.select([sys.stdin], [sys.stdout], [], 0.0)
+    except select.error:
+        pass
+    zr,zw,zx = zmq.select([socket],[socket],[], timeout = 0.0)
 
-    
+    if (sys.stdin in r) and (socket in zw):
+        x = sys.stdin.read(1)
+        socket.send_json({'p':x})
+
+    if (socket in zr) and (sys.stdout in w):
+        x = socket.recv_json()
+        try:
+            plain = x['p']
+            sys.stdout.write(plain)
+            while True:
+                r, w, x  = select.select([], [sys.stdout], [], 0.0)
+                if sys.stdout in w:
+                    sys.stdout.flush()
+                    break
+        except KeyError:
+            if 'ctrl' in x:
+                ctrlmsg = x['ctrl']
+                if 'terminated' in ctrlmsg:
+                    sys.stdout.write('\r\nexiting... \r\n')
+                    socket.send_json({'ctrl':'terminated'})
+                    return 1
+    return 0
+
+def read_write_nontty(socket):
+    EOF_reached = False
+    try:
+        r, w, x  = select.select([sys.stdin], [sys.stdout], [], 0.0)
+    except select.error:
+        pass
+    zr,zw,zx = zmq.select([socket],[socket],[], timeout = 0.0)
+
+    if (sys.stdin in r) and (socket in zw):
+        x = sys.stdin.readline()
+        if not EOF_reached:
+            socket.send_json({'p':x})
+        if x == '':
+            EOF_reached = True
+
+    if (socket in zr) and (sys.stdout in w):
+        x = socket.recv_json()
+        try:
+            plain = x['p']
+            sys.stdout.write(plain)
+            while True:
+                r, w, x  = select.select([], [sys.stdout], [], 0.0)
+                if sys.stdout in w:
+                    sys.stdout.flush()
+                    break
+        except KeyError:
+            if 'ctrl' in x:
+                ctrlmsg = x['ctrl']
+                if 'terminated' in ctrlmsg:
+                    sys.stdout.write('\r\nexiting... \r\n')
+                    socket.send_json({'ctrl':'terminated'})
+                    return 1
+    return 0
 
 if __name__ == '__main__':
     client()
