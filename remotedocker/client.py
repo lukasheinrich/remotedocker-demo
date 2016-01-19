@@ -79,6 +79,7 @@ def client(container,command,output,tunnel):
         handle_nontty(socket)
 
     click.secho('Bye.', fg = 'green')
+    sys.exit(0)
     return
 
 def terminal_size():
@@ -125,6 +126,14 @@ def get_sigterm_handler(socket):
         raise RuntimeError('terminated due to handled signa')
     return handler
 
+def handle_uncaught_exception(socket):
+    click.secho('uncaught exception.. terminating', fg = 'red')
+    socket.send_json({'ctrl':{'signal':signal.SIGTERM}})
+    time.sleep(1)
+    print sys.exc_info()
+    click.secho('signal sent.', fg = 'red')
+    click.Abort()
+    
 def handle_nontty(socket):
     click.echo('non TTY mode')
     try:
@@ -135,12 +144,7 @@ def handle_nontty(socket):
         click.secho('exception {}'.format(e))
         click.Abort()
     except:
-        click.secho('uncaught exception.. terminating', fg = 'red')
-        socket.send_json({'ctrl':{'signal':signal.SIGTERM}})
-        time.sleep(1)
-        print sys.exc_info()
-        click.secho('signal sent.', fg = 'red')
-        click.Abort()
+        handle_uncaught_exception(socket)
     finally:
         pass
     return
@@ -148,7 +152,6 @@ def handle_nontty(socket):
 def handle_tty(socket):
     try:
         click.secho('we\'ll be with you shortly...', fg = 'green')
-    
         rows,cols = terminal_size()
         socket.send_json({'ctrl':{'term_size':{'rows':rows, 'cols':cols}}})
     
@@ -156,15 +159,13 @@ def handle_tty(socket):
         # Add O_NONBLOCK to the stdin descriptor flags 
         # flags = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
         # fcntl.fcntl(sys.stdin, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
         tty.setraw(sys.stdin.fileno())
         tty.setcbreak(sys.stdin.fileno())
         while True:
             s = read_write(socket)
             if s > 0: break
     except:
-        click.secho('uncaught exception.. terminating', fg = 'red')
-        socket.send_json({'ctrl':{'signal':signal.SIGTERM}})
+        handle_uncaught_exception(socket)
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
