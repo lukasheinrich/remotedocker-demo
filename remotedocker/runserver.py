@@ -91,8 +91,6 @@ def handle_nontty(cmd,cid,socket):
     import shlex
     p = subprocess.Popen(shlex.split(cmd), stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
     print 'started container with pid: {}'.format(p.pid)
-    container_id = get_container_id(cid)
-    print 'container id is {}'.format(container_id)
 
     while True:
         if p.poll() is not None:
@@ -124,7 +122,7 @@ def handle_nontty(cmd,cid,socket):
                         print 'got signal: {}'.format(ctrlmsg['signal'])
                         os.kill(p.pid,ctrlmsg['signal'])
 			if ctrlmsg['signal'] in [signal.SIGHUP,signal.SIGTERM,signal.SIGKILL]:
-			    stop_container(container_id)
+			    stop_container(get_container_id())
                             return
         if (p.stdout in r) and (socket in zw):
             x = os.read(p.stdout.fileno(),1024)
@@ -144,8 +142,6 @@ def handle_tty(cmd,cid,socket):
 
     p = subprocess.Popen(shlex.split(cmd), stdin = slave, stdout = slave, stderr = slave)
     print 'started container with pid: {}'.format(p.pid)
-    container_id = get_container_id(cid)
-    print 'container id is {}'.format(container_id)
 
     term_size = socket.recv_json()['ctrl']['term_size']
     set_winsize(master,term_size['rows'],term_size['cols'],p.pid)
@@ -191,7 +187,7 @@ def handle_tty(cmd,cid,socket):
  		        print 'got signal: {}'.format(ctrlmsg['signal']) 
                         os.kill(p.pid,ctrlmsg['signal'])
 			if ctrlmsg['signal'] in [signal.SIGHUP,signal.SIGTERM,signal.SIGKILL]:
-                            stop_container(container_id)
+                            stop_container(get_container_id(cid))
                             return
             #print "wrote it"
 
