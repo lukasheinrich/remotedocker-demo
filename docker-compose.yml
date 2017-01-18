@@ -2,14 +2,14 @@ version: '2'
 services:
   webserver:
     command: npm start
-    image: webterm
+    image: lukasheinrich/remotedocker-webterm
     environment:
       - REMOTEDOCKER_BROKERSERVER=broker:4000
       - REMOTEDOCKER_SOCKETHOST=broker
     ports:
       - 3000:3000
   broker:
-    image: remotedocker
+    image: lukasheinrich/remotedocker
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: python webserver.py
