@@ -1,0 +1,18 @@
+version: '2'
+services:
+  webserver:
+    command: npm start
+    image: webterm
+    environment:
+      - REMOTEDOCKER_BROKERSERVER=broker:4000
+      - REMOTEDOCKER_SOCKETHOST=broker
+    ports:
+      - 3000:3000
+  broker:
+    image: remotedocker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: python webserver.py
+    ports:
+      - 4000:4000
+      - 5000-5099:5000-5099

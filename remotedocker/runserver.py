@@ -73,8 +73,9 @@ def docker_command(container,command,afsdirmount,istty):
 
 def stop_container(container_id):
     print 'stopping container with id {}'.format(container_id)
-    dockerclient = docker.Client()
-    dockerclient.stop(container_id)
+    # dockerclient = docker.Client()
+    # dockerclient.stop(container_id)
+    subprocess.check_call(['docker','stop',container_id])
     print 'container stopped'
 
 def get_container_id(cid):
@@ -195,5 +196,5 @@ def handle_tty(cmd,cid,socket):
 #        time.sleep(0.001)
 
 if __name__ == '__main__':
-    start_server(5556, 'python:2.7', 'bash','/afs/cern.ch/user/l/lheinric/testafs')
-#    start_server(5556, 'python:2.7', 'bash',None)
+    # start_server(5556, 'python:2.7', 'bash','/afs/cern.ch/user/l/lheinric/testafs')
+   start_server(5556, 'python:2.7', 'bash',None)

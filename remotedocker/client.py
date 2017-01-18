@@ -20,25 +20,23 @@ from zmq import ssh
 @click.argument('container')
 @click.argument('command')
 @click.option('-o','--output',default = None)
+@click.option('-s','--sockethost',default = 'lheinric-dockerinteractive')
+@click.option('-b','--broker',default = 'lheinric-dockerinteractive')
 @click.option('--tunnel/--no-tunnel',default = False)
-def client(container,command,output,tunnel):
+def client(container,command,output,tunnel,sockethost,broker):
     context = zmq.Context()
     
     if tunnel:
-        ssh.tunnel.openssh_tunnel(6000,6000,'lxplus','lheinric-dockerinteractive')
-        webhost = 'localhost'
-    else:
-        webhost = 'lheinric-dockerinteractive'
+        ssh.tunnel.openssh_tunnel(6000,6000,'lxplus',broker)
+        broker = 'localhost:6000'
 
-    url  = 'http://{0}:6000/start?'.format(webhost)
+    url  = 'http://{0}/start?'.format(broker)
     parameters = []
-    parameters.append('container={0}'.format(container))
+    parameters.append('image={0}'.format(container))
     parameters.append('command={0}'.format(command))
     if output:
-        parameters.append('afsdirmount={0}'.format(output))
-
+        parameters.append('dirmount={0}'.format(output))
     url = url + '&'.join(parameters)
-
 
     r = requests.get(url)
     if not r.ok:
@@ -53,10 +51,17 @@ def client(container,command,output,tunnel):
     #incoming messages
     socket = context.socket(zmq.PAIR)
     if tunnel:
-        ssh.tunnel_connection(socket,'tcp://lheinric-dockerinteractive:{0}'.format(readfrom),'lxplus')
+        ssh.tunnel_connection(socket,'tcp://{0}:{1}'.format(sockethost,readfrom),'lxplus')
     else:
-        socket.connect("tcp://lheinric-dockerinteractive:{0}".format(readfrom))
+        socket.connect("tcp://{0}:{1}".format(sockethost,readfrom))
 
+    connect_remotedocker(socket)
+
+    click.secho('Bye.', fg = 'green')
+    sys.exit(0)
+    return
+
+def connect_remotedocker(socket):
     poller = zmq.Poller()
     poller.register(socket,zmq.POLLIN)
     sockets = [socket]
@@ -78,9 +83,6 @@ def client(container,command,output,tunnel):
     else:
         handle_nontty(socket)
 
-    click.secho('Bye.', fg = 'green')
-    sys.exit(0)
-    return
 
 def terminal_size():
     # Check for buggy platforms (see pexpect.setwinsize()).

@@ -27,18 +27,20 @@ def spot_available():
 @app.route('/start')
 def start():
     print "starting "
-    container = flask.request.args['container']
+    container = flask.request.args['image']
     command =  flask.request.args['command']
-    afsdirmount = flask.request.args.get('afsdirmount',None)
-    publishport = random.randint(5000,5999)
+    dirmount = flask.request.args.get('dirmount',None)
+
+
 
     if not spot_available():
         return '',404
 
-    print 'spot available: {}'.format(spot_available())
 
-    print (publishport,container,command,afsdirmount)
-    result = pool.apply_async(start_server,(publishport,container,command,afsdirmount))
+    publishport = random.randint(5000,5099)
+    print 'spot available: {}'.format(spot_available())
+    print (publishport,container,command,dirmount)
+    result = pool.apply_async(start_server,(publishport,container,command,dirmount))
     global resultsobjs
     resultsobjs += [result]
     return flask.jsonify({'readfrom':publishport}) 
@@ -48,4 +50,4 @@ def home():
     return 'OK!'
     
 if __name__ == '__main__':
-    app.run(host = '0.0.0.0', port = 6000)
+    app.run(host = '0.0.0.0', port = 4000)
